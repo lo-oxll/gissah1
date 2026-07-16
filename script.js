@@ -237,7 +237,7 @@ function openBookingModal(){
         {
           customer_name: name,
           phone_number: phone,
-          address: loc,
+          location: loc,
           product_name: `${p.name} (عدد: ${qty})`
         }
       ]);
@@ -257,7 +257,7 @@ function openBookingModal(){
       total,
       qty,
       customer_name: name,
-      address: loc,
+      location: loc,
       phone_number: phone,
       created_at: new Date().toISOString()
     };
