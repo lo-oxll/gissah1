@@ -55,6 +55,38 @@ function showToast(text, kind="ok"){
   setTimeout(()=> el.remove(), 3200);
 }
 
+// يعرض اسم المستخدم وكلمة المرور بنصها الصريح مرة واحدة فقط عند إنشاء مشرفة جديدة.
+// بعد إغلاق هذه النافذة لا يمكن استرجاع كلمة المرور من أي مكان (لأن المخزَّن هو هاش فقط)،
+// لذا يجب على المالكة نسخها الآن أو إخبار المشرفة بها فورًا.
+function showOneTimeCredentials(username, password){
+  modalBg.innerHTML = `
+    <div class="modal">
+      <div class="row">
+        <h2>بيانات دخول المشرفة</h2>
+        <button class="close-x" id="closeCredModal">✕</button>
+      </div>
+      <p class="hint" style="color:var(--err);margin-top:-8px;">
+        احفظي كلمة المرور الآن — لن تظهر مرة أخرى بعد إغلاق هذه النافذة، لأنها تُخزَّن مشفّرة ولا يمكن استرجاعها لاحقًا.
+      </p>
+      <div class="field"><div class="box">👤<input readonly value="${esc(username)}"></div></div>
+      <div class="field"><div class="box">🔑<input readonly value="${esc(password)}" style="font-family:monospace;letter-spacing:.05em;"></div></div>
+      <button class="primary-btn" id="copyCredBtn">نسخ البيانات</button>
+      <button class="ghost-btn" id="doneCredBtn">تم، أغلقي</button>
+    </div>
+  `;
+  modalBg.classList.add("open");
+  document.getElementById("closeCredModal").onclick = closeModal;
+  document.getElementById("doneCredBtn").onclick = closeModal;
+  document.getElementById("copyCredBtn").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(`اسم المستخدم: ${username}\nكلمة المرور: ${password}`);
+      showToast("تم النسخ");
+    } catch {
+      showToast("تعذر النسخ التلقائي، انسخي يدويًا", "err");
+    }
+  };
+}
+
 /* ======================= الإعدادات (متزامنة عبر Supabase) ======================= */
 async function loadSettings(){
   try {
@@ -596,7 +628,7 @@ async function renderAdminsTab(body){
   body.innerHTML = `
     <div class="panel">
       <h3>إضافة مشرفة جديدة</h3>
-      <p class="hint">يمكن للمشرفة الجديدة مراجعة الحجوزات فقط، ولا تستطيع تغيير كلمة المرور أو رقم واتساب أو حذف/إضافة المنتجات.</p>
+      <p class="hint">يمكن للمشرفة الجديدة مراجعة الحجوزات فقط، ولا تستطيع تغيير كلمة المرور أو رقم واتساب أو حذف/إضافة المنتجات.<br>ستظهر لكِ كلمة المرور مرة واحدة فقط بعد الإضافة — احفظيها فورًا، فلا يمكن استرجاعها بعد ذلك من أي مكان.</p>
       <input class="plain-input" id="newUsr" placeholder="اسم مستخدم جديد">
       <input class="plain-input" id="newPw" type="password" placeholder="كلمة المرور">
       <div class="err" id="addAdminErr" style="margin:-6px 0 10px;color:var(--err);font-size:12px;"></div>
@@ -629,9 +661,11 @@ async function renderAdminsTab(body){
         p_new_password_hash: newHash
       });
       if (error) throw error;
-      showToast("تمت إضافة المشرفة بنجاح");
       document.getElementById("newUsr").value = "";
       document.getElementById("newPw").value = "";
+      // كلمة المرور بنصها الصريح موجودة هنا فقط لحظيًا قبل أن تُهاش وتُرسل.
+      // بعد هذه اللحظة لا يمكن استرجاعها من أي مكان، لذا نعرضها مرة واحدة فقط للمشرفة.
+      showOneTimeCredentials(newUsr, newPw);
       await renderAdminsTab(body);
     } catch (e) {
       console.error("add admin error", e);
