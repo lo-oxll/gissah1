@@ -460,7 +460,7 @@ function openBookingModal(){
     // وإلا يُستخدم الرقم العام المشترك من الإعدادات كخطة بديلة
     const num = formatWhatsapp(assignedWhatsapp || state.settings.whatsapp);
     if (num){
-      const msg = `حجز جديد من متجر قصة\nالمنتج: ${p.name}\nالكمية: ${qty}\nالسعر الإجمالي: ${total} د.ع\nاسم العميل: ${name}\nالموقع: ${loc}${cityName ? ` (${cityName}${regionName ? " - " + regionName : ""})` : ""}\nرقم الهاتف: ${phone}${instagram ? `\nانستغرام: @${instagram}` : ""}`;
+      const msg = `حجز جديد من متجر قصة\nالمنتج: ${p.name}\nالكمية: ${qty}\nالسعر الإجمالي: ${total} د.ع\nاسم العميل: ${name}\nالموقع: ${loc}${cityName ? ` (${cityName}${regionName ? " - " + regionName : ""})` : ""}\nرقم الهاتف: ${phone}${instagram ? `\nانستغرام: https://instagram.com/${instagram}` : ""}`;
       window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank");
     }
     showToast("تم إرسال الحجز بنجاح، سيتم التواصل معك قريبًا");
@@ -729,8 +729,8 @@ function renderOrdersTab(body){
         <div class="order-details">
           <div>👤 ${esc(o.customer_name)}</div>
           <div>📍 ${esc(o.address || o.location)}${o.city_name ? ` — ${esc(o.city_name)}${o.region_name ? " / " + esc(o.region_name) : ""}` : ""}</div>
-          <div>📞 ${esc(o.phone_number || o.phone)}</div>
-          ${o.instagram_username ? `<div>📷 @${esc(o.instagram_username)}</div>` : ""}
+          <div>📞 <a href="https://wa.me/${formatWhatsapp(o.phone_number || o.phone)}" target="_blank" style="color:var(--ink);text-decoration:underline;">${esc(o.phone_number || o.phone)}</a></div>
+          ${o.instagram_username ? `<div>📷 <a href="https://instagram.com/${esc(o.instagram_username)}" target="_blank" style="color:var(--moss);text-decoration:underline;">@${esc(o.instagram_username)}</a></div>` : ""}
           <div style="margin-top:6px;">${alwaseetBadge(o)}</div>
         </div>
       </div>
