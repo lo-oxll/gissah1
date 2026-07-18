@@ -45,6 +45,12 @@ h1.brand{font-size:56px;margin:0;line-height:1;color:var(--moss);position:relati
 .field .box{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px;}
 .field input, .field textarea{border:0;outline:0;background:transparent;flex:1;font-family:'Cairo',sans-serif;font-size:14px;}
 .field .err{color:var(--err);font-size:12px;margin:4px 4px 0;}
+.suggest-list{position:absolute;z-index:5;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:4px;max-height:190px;overflow:auto;box-shadow:0 8px 20px rgba(0,0,0,.1);}
+.suggest-list button{display:block;width:100%;text-align:right;padding:10px 14px;border:0;background:none;cursor:pointer;font-family:'Cairo',sans-serif;font-size:13px;color:var(--ink);}
+.suggest-list button:hover{background:var(--card);}
+.street-chips{display:flex;flex-wrap:wrap;gap:6px;margin:-6px 0 14px;}
+.street-chip{border:1px solid var(--line);background:var(--card);color:var(--moss-dark);padding:6px 13px;border-radius:999px;font-size:12px;cursor:pointer;font-family:'Cairo',sans-serif;}
+.street-chip:hover{background:#FCE7F1;}
 .total-row{display:flex;justify-content:space-between;padding:0 2px;margin:18px 0 14px;font-weight:700;}
 .primary-btn{width:100%;border:0;padding:14px;border-radius:12px;background:var(--moss);color:#FFFFFF;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif;font-size:15px;}
 .primary-btn:disabled{opacity:.6;cursor:default;}
