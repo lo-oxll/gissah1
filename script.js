@@ -24,6 +24,20 @@ async function sha256Hex(text) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// شوارع رئيسية معروفة لكل منطقة، تُقترح تلقائيًا لتسريع وتوحيد إدخال الموقع.
+// المطابقة تتم بالاحتواء (includes) وليس التطابق الحرفي، لأن اسم المنطقة القادم من الوسيط
+// قد يكون بصيغة "مدينة الصدر - قطاع 17" وليس "مدينة الصدر" فقط.
+const STREETS_BY_REGION = {
+  "مدينة الصدر": ["شارع الداخل", "شارع الفلاح", "شارع الجوادر", "شارع الأرفلي", "شارع الكيارة", "العورة"],
+};
+function getStreetsForRegion(regionName){
+  if (!regionName) return [];
+  for (const key in STREETS_BY_REGION) {
+    if (regionName.includes(key)) return STREETS_BY_REGION[key];
+  }
+  return [];
+}
+
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
 /* ======================= الربط مع شركة الوسيط للتوصيل ======================= */
@@ -275,13 +289,12 @@ function openBookingModal(){
   let citiesFailed = false;
   // القيم تُحفظ هنا وتُعاد تعبئتها في كل إعادة رسم، لأن paint() يعيد بناء الـ HTML من الصفر
   // في كل مرة (عند تغيير الكمية أو المدينة)، وبدون هذا كانت قيم الحقول تُمسح بالكامل.
-  const vals = { name: "", loc: "", phone: "", instagram: "" };
+  const vals = { name: "", loc: "", phone: "", instagram: "", cityId: "", cityName: "", regionId: "", regionName: "" };
 
   function paint(){
     const total = qty * Number(p.price);
     const modalImg = p.image ? '<img src="' + esc(p.image) + '">' : '<div class="ph"></div>';
-    const cityOptions = cities.map(c => `<option value="${esc(c.id)}">${esc(c.city_name)}</option>`).join("");
-    const regionOptions = regions.map(r => `<option value="${esc(r.id)}">${esc(r.region_name)}</option>`).join("");
+    const cityOptions = cities.map(c => `<option value="${esc(c.id)}" ${String(c.id)===String(vals.cityId) ? "selected" : ""}>${esc(c.city_name)}</option>`).join("");
     modalBg.innerHTML = `
       <div class="modal">
         <div class="row">
@@ -308,11 +321,15 @@ function openBookingModal(){
         <div class="field"><div class="box">🏙️<select id="fCity" style="width:100%;background:transparent;border:0;outline:0;font-family:'Cairo',sans-serif;font-size:14px;">
           <option value="">${cities.length ? "اختر المدينة" : "جارِ التحميل..."}</option>${cityOptions}
         </select></div><div class="err" id="errCity"></div></div>
-        <div class="field"><div class="box">🗺️<select id="fRegion" style="width:100%;background:transparent;border:0;outline:0;font-family:'Cairo',sans-serif;font-size:14px;" ${regions.length ? "" : "disabled"}>
-          <option value="">${regions.length ? "اختر المنطقة" : "اختر المدينة أولًا"}</option>${regionOptions}
-        </select></div><div class="err" id="errRegion"></div></div>
+        <div style="position:relative;">
+          <div class="field"><div class="box">🗺️<input id="fRegionSearch" autocomplete="off" value="${esc(vals.regionName)}"
+            placeholder="${!vals.cityId ? "اختر المدينة أولًا" : (regions.length ? "ابحث عن المنطقة" : "جارِ التحميل...")}"
+            ${vals.cityId ? "" : "disabled"}></div><div class="err" id="errRegion"></div></div>
+          <div id="regionSuggest" class="suggest-list" style="display:none;"></div>
+        </div>
         `}
         <div class="field"><div class="box">📍<input id="fLoc" placeholder="${citiesFailed ? "الموقع / العنوان" : "أقرب نقطة دالة (تفاصيل إضافية)"}" value="${esc(vals.loc)}"></div><div class="err" id="errLoc"></div></div>
+        ${citiesFailed ? "" : `<div id="streetChips" class="street-chips"></div>`}
         <div class="field"><div class="box">📞<input id="fPhone" placeholder="رقم الهاتف" type="tel" value="${esc(vals.phone)}"></div><div class="err" id="errPhone"></div></div>
         <div class="field"><div class="box">📷<input id="fInsta" placeholder="يوزر انستغرام (اختياري)" value="${esc(vals.instagram)}" dir="ltr"></div></div>
         <div class="total-row"><span style="font-weight:400;color:var(--muted)">الإجمالي</span><span>${money(total)} د.ع</span></div>
@@ -324,29 +341,77 @@ function openBookingModal(){
     document.getElementById("qtyMinus").onclick = () => { qty = Math.max(1, qty-1); paint(); };
     document.getElementById("qtyPlus").onclick = () => { qty = Math.min(10, qty+1); paint(); };
     document.getElementById("submitOrder").onclick = submit;
-    // حفظ القيم فور كتابتها حتى تبقى محفوظة عبر أي إعادة رسم لاحقة
+    // حفظ القيم فور كتابتها حتى تبقى محفوظة عبر أي إعادة رسم لاحقة (تغيير الكمية مثلًا)
     document.getElementById("fName").oninput = (e) => vals.name = e.target.value;
     document.getElementById("fLoc").oninput = (e) => vals.loc = e.target.value;
     document.getElementById("fPhone").oninput = (e) => vals.phone = e.target.value;
     document.getElementById("fInsta").oninput = (e) => vals.instagram = e.target.value;
+    renderStreetChips();
 
     if (!citiesFailed) {
       document.getElementById("fCity").onchange = async (e) => {
-        const cityId = e.target.value;
+        vals.cityId = e.target.value;
+        vals.cityName = cities.find(c => String(c.id) === String(vals.cityId))?.city_name || "";
+        vals.regionId = ""; vals.regionName = "";
         regions = [];
         paint();
-        document.getElementById("fCity").value = cityId;
-        if (!cityId) return;
+        if (!vals.cityId) return;
         try {
-          regions = await getAlwaseetRegions(cityId);
+          regions = await getAlwaseetRegions(vals.cityId);
         } catch (err) {
           console.error("regions load error", err);
         }
         paint();
-        // إعادة اختيار المدينة نفسها بعد إعادة الرسم حتى لا تُفقد عند تحميل المناطق
-        document.getElementById("fCity").value = cityId;
       };
+
+      const regionInput = document.getElementById("fRegionSearch");
+      const suggestEl = document.getElementById("regionSuggest");
+      function showRegionSuggestions(query){
+        const q = (query || "").trim();
+        const matches = q ? regions.filter(r => r.region_name.includes(q)) : regions;
+        if (!matches.length) { suggestEl.style.display = "none"; suggestEl.innerHTML = ""; return; }
+        suggestEl.innerHTML = matches.slice(0, 40).map(r =>
+          `<button type="button" data-rid="${esc(r.id)}" data-rname="${esc(r.region_name)}">${esc(r.region_name)}</button>`
+        ).join("");
+        suggestEl.style.display = "block";
+        suggestEl.querySelectorAll("[data-rid]").forEach(btn => {
+          // mousedown بدل click حتى يُنفَّذ قبل blur الذي يخفي القائمة
+          btn.onmousedown = (ev) => {
+            ev.preventDefault();
+            vals.regionId = btn.dataset.rid;
+            vals.regionName = btn.dataset.rname;
+            regionInput.value = vals.regionName;
+            suggestEl.style.display = "none";
+            renderStreetChips();
+          };
+        });
+      }
+      regionInput.oninput = (e) => {
+        vals.regionId = ""; // إلغاء أي منطقة مؤكدة سابقًا حتى تُختار منطقة جديدة فعليًا من الاقتراحات
+        vals.regionName = e.target.value;
+        showRegionSuggestions(e.target.value);
+      };
+      regionInput.onfocus = () => showRegionSuggestions(regionInput.value);
+      regionInput.addEventListener("blur", () => setTimeout(() => { suggestEl.style.display = "none"; }, 150));
     }
+  }
+
+  // يعرض أزرار سريعة لأشهر شوارع المنطقة المختارة (إن وُجدت) أسفل حقل الموقع،
+  // النقر على أي زر يضيف اسم الشارع لحقل الموقع مباشرة بدل كتابته يدويًا
+  function renderStreetChips(){
+    const el = document.getElementById("streetChips");
+    if (!el) return;
+    const streets = getStreetsForRegion(vals.regionName);
+    if (!streets.length) { el.innerHTML = ""; return; }
+    el.innerHTML = streets.map(s => `<button type="button" class="street-chip" data-street="${esc(s)}">${esc(s)}</button>`).join("");
+    el.querySelectorAll("[data-street]").forEach(btn => {
+      btn.onclick = () => {
+        const s = btn.dataset.street;
+        vals.loc = (vals.loc && !vals.loc.includes(s)) ? `${vals.loc} - ${s}` : (vals.loc || s);
+        const locInput = document.getElementById("fLoc");
+        if (locInput) locInput.value = vals.loc;
+      };
+    });
   }
 
   // تحميل قائمة المدن أول مرة فقط، وإن فشل الاتصال (مثلًا الدالة غير منشورة بعد)
@@ -367,8 +432,8 @@ function openBookingModal(){
     const loc = vals.loc.trim();
     const phone = vals.phone.trim();
     const instagram = vals.instagram.trim().replace(/^@/, "");
-    const cityId = citiesFailed ? "" : document.getElementById("fCity")?.value;
-    const regionId = citiesFailed ? "" : document.getElementById("fRegion")?.value;
+    const cityId = citiesFailed ? "" : vals.cityId;
+    const regionId = citiesFailed ? "" : vals.regionId;
     let ok = true;
     document.getElementById("errName").textContent = "";
     document.getElementById("errLoc").textContent = "";
@@ -388,8 +453,8 @@ function openBookingModal(){
     btn.disabled = true; btn.textContent = "جارِ الإرسال...";
 
     const total = qty * Number(p.price);
-    const cityName = cities.find(c => String(c.id) === String(cityId))?.city_name || "";
-    const regionName = regions.find(r => String(r.id) === String(regionId))?.region_name || "";
+    const cityName = vals.cityName;
+    const regionName = vals.regionName;
 
     // 1) إرسال الطلب إلى جدول orders في Supabase أولًا (هذا هو السجل الأساسي دائمًا،
     //    بغض النظر عن نجاح أو فشل الاتصال بالوسيط لاحقًا)
