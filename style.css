@@ -6,13 +6,11 @@
 body{margin:0;background:var(--bg);color:var(--ink);font-family:'Cairo',sans-serif;}
 .display{font-family:'Aref Ruqaa',serif;}
 .wrap{max-width:960px;margin:0 auto;padding:0 20px 100px;}
-header.hero{text-align:center;padding:40px 0 40px;}
-.brand-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:6px;}
-.logo-img{width:56px;height:56px;display:block;}
-/* letter-spacing كبير يكسر اتصال الحروف العربية ببعضها ويجعل النص يبدو مقطّعًا خصوصًا بالموبايل،
-   لذلك أُزيل هنا تمامًا بدل تصغيره فقط */
-.eyebrow{font-size:13px;letter-spacing:0;color:var(--moss);font-weight:700;margin:0 0 10px;white-space:nowrap;}
-h1.brand{font-size:64px;margin:0;line-height:1;}
+header.hero{text-align:center;padding:48px 0 40px;background:radial-gradient(ellipse at 50% 0%, #FDF1F7 0%, rgba(253,241,247,0) 65%);}
+.brand-row{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:14px;}
+.logo-img{width:60px;height:60px;display:block;filter:drop-shadow(0 6px 14px rgba(214,93,145,.28));}
+h1.brand{font-size:58px;margin:0;line-height:1;color:var(--ink);}
+.eyebrow{display:inline-block;font-size:12px;font-weight:700;color:var(--moss-dark);background:#FCE7F1;border:1px solid var(--line);padding:6px 20px;border-radius:999px;margin:0 0 18px;}
 .lede{max-width:420px;margin:0 auto;color:#6b5560;line-height:1.8;}
 .contact-btn{display:inline-block;margin-top:18px;padding:11px 26px;border-radius:999px;background:var(--moss);color:#fff;font-weight:700;font-size:14px;text-decoration:none;transition:background .2s;}
 .contact-btn:hover{background:var(--moss-dark);}
