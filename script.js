@@ -241,9 +241,11 @@ function renderStore(){
   app.innerHTML = `
     <div class="wrap">
       <header class="hero">
-        <img src="logo.png" alt="شعار قصّة" class="logo-img">
+        <div class="brand-row">
+          <img src="logo.png" alt="شعار قصّة" class="logo-img">
+          <h1 class="brand display">قصّة</h1>
+        </div>
         <p class="eyebrow">عناية بالجسم</p>
-        <h1 class="brand display">قصّة</h1>
         <p class="lede">كل منتج هنا هو فصل من طقوسك اليومية. اختر منتجك واحجزه، وسنتواصل معك لإتمام الطلب.</p>
         <a href="https://lo-oxll.github.io/gissa-web/" target="_blank" rel="noopener" class="contact-btn">تواصل مع المتجر</a>
       </header>
