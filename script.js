@@ -116,23 +116,23 @@ function showToast(text, kind="ok"){
   setTimeout(()=> el.remove(), 3200);
 }
 
-// يعرض اسم المستخدم وكلمة المرور بنصها الصريح مرة واحدة فقط عند إنشاء مشرفة جديدة.
+// يعرض اسم المستخدم وكلمة المرور بنصها الصريح مرة واحدة فقط عند إنشاء مشرف جديد.
 // بعد إغلاق هذه النافذة لا يمكن استرجاع كلمة المرور من أي مكان (لأن المخزَّن هو هاش فقط)،
-// لذا يجب على المالكة نسخها الآن أو إخبار المشرفة بها فورًا.
+// لذا يجب على المالك نسخها الآن أو إخبار المشرف بها فورًا.
 function showOneTimeCredentials(username, password){
   modalBg.innerHTML = `
     <div class="modal">
       <div class="row">
-        <h2>بيانات دخول المشرفة</h2>
+        <h2>بيانات دخول المشرف</h2>
         <button class="close-x" id="closeCredModal">✕</button>
       </div>
       <p class="hint" style="color:var(--err);margin-top:-8px;">
-        احفظي كلمة المرور الآن — لن تظهر مرة أخرى بعد إغلاق هذه النافذة، لأنها تُخزَّن مشفّرة ولا يمكن استرجاعها لاحقًا.
+        احفظ كلمة المرور الآن — لن تظهر مرة أخرى بعد إغلاق هذه النافذة، لأنها تُخزَّن مشفّرة ولا يمكن استرجاعها لاحقًا.
       </p>
       <div class="field"><div class="box">👤<input readonly value="${esc(username)}"></div></div>
       <div class="field"><div class="box">🔑<input readonly value="${esc(password)}" style="font-family:monospace;letter-spacing:.05em;"></div></div>
       <button class="primary-btn" id="copyCredBtn">نسخ البيانات</button>
-      <button class="ghost-btn" id="doneCredBtn">تم، أغلقي</button>
+      <button class="ghost-btn" id="doneCredBtn">تم، أغلق</button>
     </div>
   `;
   modalBg.classList.add("open");
@@ -143,7 +143,7 @@ function showOneTimeCredentials(username, password){
       await navigator.clipboard.writeText(`اسم المستخدم: ${username}\nكلمة المرور: ${password}`);
       showToast("تم النسخ");
     } catch {
-      showToast("تعذر النسخ التلقائي، انسخي يدويًا", "err");
+      showToast("تعذر النسخ التلقائي، انسخ يدويًا", "err");
     }
   };
 }
@@ -233,7 +233,7 @@ function renderStore(){
             ${p.description ? `<p>${esc(p.description)}</p>` : ""}
           </div>
         </div>
-        <button class="book-btn" data-book="${p.id}">احجزي الآن</button>
+        <button class="book-btn" data-book="${p.id}">احجز الآن</button>
       </div>
     `;
   }).join("");
@@ -243,7 +243,7 @@ function renderStore(){
       <header class="hero">
         <p class="eyebrow">عناية بالجسم</p>
         <h1 class="brand display">قصّة</h1>
-        <p class="lede">كل منتج هنا هو فصل من طقوسك اليومية. اختاري منتجك واحجزيه، وسنتواصل معك لإتمام الطلب.</p>
+        <p class="lede">كل منتج هنا هو فصل من طقوسك اليومية. اختر منتجك واحجزه، وسنتواصل معك لإتمام الطلب.</p>
       </header>
       ${state.products.length === 0 ? `<div class="empty">لم تتم إضافة أي منتجات بعد.</div>` : `<div class="grid">${items}</div>`}
     </div>
@@ -271,7 +271,7 @@ function openBookingModal(){
   let citiesFailed = false;
   // القيم تُحفظ هنا وتُعاد تعبئتها في كل إعادة رسم، لأن paint() يعيد بناء الـ HTML من الصفر
   // في كل مرة (عند تغيير الكمية أو المدينة)، وبدون هذا كانت قيم الحقول تُمسح بالكامل.
-  const vals = { name: "", loc: "", phone: "" };
+  const vals = { name: "", loc: "", phone: "", instagram: "" };
 
   function paint(){
     const total = qty * Number(p.price);
@@ -302,14 +302,15 @@ function openBookingModal(){
         <div class="field"><div class="box">👤<input id="fName" placeholder="الاسم الكامل" value="${esc(vals.name)}"></div><div class="err" id="errName"></div></div>
         ${citiesFailed ? "" : `
         <div class="field"><div class="box">🏙️<select id="fCity" style="width:100%;background:transparent;border:0;outline:0;font-family:'Cairo',sans-serif;font-size:14px;">
-          <option value="">${cities.length ? "اختاري المدينة" : "جارِ التحميل..."}</option>${cityOptions}
+          <option value="">${cities.length ? "اختر المدينة" : "جارِ التحميل..."}</option>${cityOptions}
         </select></div><div class="err" id="errCity"></div></div>
         <div class="field"><div class="box">🗺️<select id="fRegion" style="width:100%;background:transparent;border:0;outline:0;font-family:'Cairo',sans-serif;font-size:14px;" ${regions.length ? "" : "disabled"}>
-          <option value="">${regions.length ? "اختاري المنطقة" : "اختاري المدينة أولًا"}</option>${regionOptions}
+          <option value="">${regions.length ? "اختر المنطقة" : "اختر المدينة أولًا"}</option>${regionOptions}
         </select></div><div class="err" id="errRegion"></div></div>
         `}
         <div class="field"><div class="box">📍<input id="fLoc" placeholder="${citiesFailed ? "الموقع / العنوان" : "أقرب نقطة دالة (تفاصيل إضافية)"}" value="${esc(vals.loc)}"></div><div class="err" id="errLoc"></div></div>
         <div class="field"><div class="box">📞<input id="fPhone" placeholder="رقم الهاتف" type="tel" value="${esc(vals.phone)}"></div><div class="err" id="errPhone"></div></div>
+        <div class="field"><div class="box">📷<input id="fInsta" placeholder="يوزر انستغرام (اختياري)" value="${esc(vals.instagram)}" dir="ltr"></div></div>
         <div class="total-row"><span style="font-weight:400;color:var(--muted)">الإجمالي</span><span>${money(total)} د.ع</span></div>
         <button class="primary-btn" id="submitOrder">تأكيد الحجز</button>
       </div>
@@ -323,6 +324,7 @@ function openBookingModal(){
     document.getElementById("fName").oninput = (e) => vals.name = e.target.value;
     document.getElementById("fLoc").oninput = (e) => vals.loc = e.target.value;
     document.getElementById("fPhone").oninput = (e) => vals.phone = e.target.value;
+    document.getElementById("fInsta").oninput = (e) => vals.instagram = e.target.value;
 
     if (!citiesFailed) {
       document.getElementById("fCity").onchange = async (e) => {
@@ -360,6 +362,7 @@ function openBookingModal(){
     const name = vals.name.trim();
     const loc = vals.loc.trim();
     const phone = vals.phone.trim();
+    const instagram = vals.instagram.trim().replace(/^@/, "");
     const cityId = citiesFailed ? "" : document.getElementById("fCity")?.value;
     const regionId = citiesFailed ? "" : document.getElementById("fRegion")?.value;
     let ok = true;
@@ -370,11 +373,11 @@ function openBookingModal(){
       document.getElementById("errCity").textContent = "";
       document.getElementById("errRegion").textContent = "";
     }
-    if (!name){ document.getElementById("errName").textContent = "أدخلي الاسم"; ok = false; }
-    if (!loc){ document.getElementById("errLoc").textContent = "أدخلي الموقع"; ok = false; }
-    if (!phone || phone.replace(/\D/g,"").length < 8){ document.getElementById("errPhone").textContent = "أدخلي رقم هاتف صحيح"; ok = false; }
-    if (!citiesFailed && !cityId){ document.getElementById("errCity").textContent = "اختاري المدينة"; ok = false; }
-    if (!citiesFailed && !regionId){ document.getElementById("errRegion").textContent = "اختاري المنطقة"; ok = false; }
+    if (!name){ document.getElementById("errName").textContent = "أدخل الاسم"; ok = false; }
+    if (!loc){ document.getElementById("errLoc").textContent = "أدخل الموقع"; ok = false; }
+    if (!phone || phone.replace(/\D/g,"").length < 8){ document.getElementById("errPhone").textContent = "أدخل رقم هاتف صحيح"; ok = false; }
+    if (!citiesFailed && !cityId){ document.getElementById("errCity").textContent = "اختر المدينة"; ok = false; }
+    if (!citiesFailed && !regionId){ document.getElementById("errRegion").textContent = "اختر المنطقة"; ok = false; }
     if (!ok) return;
 
     const btn = document.getElementById("submitOrder");
@@ -398,6 +401,7 @@ function openBookingModal(){
           region_id: regionId || null,
           city_name: cityName || null,
           region_name: regionName || null,
+          instagram_username: instagram || null,
           qty,
           total,
           alwaseet_status: 'pending'
@@ -417,13 +421,14 @@ function openBookingModal(){
     const localOrder = { ...inserted, product_image: p.image || "" };
     state.orders.unshift(localOrder);
 
-    // 2) إرسال الطلب مباشرة إلى الوسيط للتوصيل — فقط إذا اختارت الزبونة مدينة/منطقة فعليًا
+    // 2) إرسال الطلب مباشرة إلى الوسيط للتوصيل — فقط إذا اختار الزبون مدينة/منطقة فعليًا
     let assignedWhatsapp = null;
     if (cityId && regionId) {
       try {
         const { qr_id, qr_link, assigned_username, assigned_whatsapp } = await sendOrderToAlwaseet({
           name, phone, cityId, regionId, location: loc,
-          productLabel: p.name, qty, total
+          productLabel: p.name, qty, total,
+          notes: instagram ? `انستغرام: @${instagram}` : undefined
         });
         localOrder.alwaseet_qr_id = qr_id;
         localOrder.alwaseet_qr_link = qr_link;
@@ -436,8 +441,8 @@ function openBookingModal(){
           assigned_staff_username: assigned_username, assigned_staff_whatsapp: assigned_whatsapp
         }).eq('id', inserted.id);
       } catch (err) {
-        // الحجز يبقى ناجحًا للزبونة دائمًا حتى لو فشل الإرسال للوسيط —
-        // يمكن للمشرفة إعادة المحاولة يدويًا من لوحة الإدارة
+        // الحجز يبقى ناجحًا للزبون دائمًا حتى لو فشل الإرسال للوسيط —
+        // يمكن للمشرف إعادة المحاولة يدويًا من لوحة الإدارة
         console.error("alwaseet create-order error", err);
         localOrder.alwaseet_status = 'failed';
         localOrder.alwaseet_error = err.message || "خطأ غير معروف";
@@ -447,11 +452,11 @@ function openBookingModal(){
       }
     }
 
-    // إن كانت هناك مشرفة مسؤولة عن هذا الطلب برقم واتساب شخصي، تُفتح المحادثة معها مباشرة؛
+    // إن كان هناك مشرف مسؤول عن هذا الطلب برقم واتساب شخصي، تُفتح المحادثة معه مباشرة؛
     // وإلا يُستخدم الرقم العام المشترك من الإعدادات كخطة بديلة
     const num = formatWhatsapp(assignedWhatsapp || state.settings.whatsapp);
     if (num){
-      const msg = `حجز جديد من متجر قصة\nالمنتج: ${p.name}\nالكمية: ${qty}\nالسعر الإجمالي: ${total} د.ع\nاسم العميل: ${name}\nالموقع: ${loc}${cityName ? ` (${cityName}${regionName ? " - " + regionName : ""})` : ""}\nرقم الهاتف: ${phone}`;
+      const msg = `حجز جديد من متجر قصة\nالمنتج: ${p.name}\nالكمية: ${qty}\nالسعر الإجمالي: ${total} د.ع\nاسم العميل: ${name}\nالموقع: ${loc}${cityName ? ` (${cityName}${regionName ? " - " + regionName : ""})` : ""}\nرقم الهاتف: ${phone}${instagram ? `\nانستغرام: @${instagram}` : ""}`;
       window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank");
     }
     showToast("تم إرسال الحجز بنجاح، سيتم التواصل معك قريبًا");
@@ -477,7 +482,7 @@ function renderAdminLogin(){
           <div class="seal" style="margin:0 auto;">دخول</div>
         </div>
         <h2 class="center" style="margin:0 0 4px;">لوحة الإدارة</h2>
-        <p class="hint center">أدخلي اسم المستخدم وكلمة المرور للدخول</p>
+        <p class="hint center">أدخل اسم المستخدم وكلمة المرور للدخول</p>
         <div class="field"><div class="box">👤<input id="usr" placeholder="اسم المستخدم" autocomplete="username"></div></div>
         <div class="field"><div class="box">🔑<input id="pw" placeholder="كلمة المرور" type="password" autocomplete="current-password"></div></div>
         <div class="err" id="loginErr" style="margin-bottom:10px;color:var(--err);font-size:12px;"></div>
@@ -522,7 +527,7 @@ function renderAdminLogin(){
       }
     } catch (e) {
       console.error("login error", e);
-      document.getElementById("loginErr").textContent = "تعذر الاتصال بالخادم، حاولي مجددًا";
+      document.getElementById("loginErr").textContent = "تعذر الاتصال بالخادم، حاول مجددًا";
       btn.disabled = false; btn.textContent = "دخول";
     }
   }
@@ -531,14 +536,14 @@ function renderAdminLogin(){
 /* ---------- لوحة الإدارة ---------- */
 function renderAdmin(){
   const isOwner = state.currentAdmin?.role === "owner";
-  const roleLabel = isOwner ? "مديرة المتجر" : "مشرفة";
+  const roleLabel = isOwner ? "مدير المتجر" : "مشرف";
 
   const tabsHtml = isOwner
     ? `
       <button class="tab ${state.adminTab==='products'?'active':''}" data-tab="products">المنتجات</button>
       <button class="tab ${state.adminTab==='orders'?'active':''}" data-tab="orders">الحجوزات (${state.orders.length})</button>
       <button class="tab ${state.adminTab==='settings'?'active':''}" data-tab="settings">الإعدادات</button>
-      <button class="tab ${state.adminTab==='admins'?'active':''}" data-tab="admins">المشرفات</button>
+      <button class="tab ${state.adminTab==='admins'?'active':''}" data-tab="admins">المشرفون</button>
       <button class="tab ${state.adminTab==='myAlwaseet'?'active':''}" data-tab="myAlwaseet">حسابي بالوسيط</button>
     `
     : `
@@ -567,7 +572,7 @@ function renderAdmin(){
   });
 
   // حماية إضافية: منع الوصول لأي تبويب غير مصرح به حتى لو تم التلاعب بالحالة محليًا
-  // المشرفة (staff) يُسمح لها فقط بـ orders و products (عرض فقط) و myAlwaseet
+  // المشرف (staff) يُسمح له فقط بـ orders و products (عرض فقط) و myAlwaseet
   if (!isOwner && !["orders", "products", "myAlwaseet"].includes(state.adminTab)) state.adminTab = "orders";
 
   const body = document.getElementById("adminBody");
@@ -582,7 +587,7 @@ function renderAdmin(){
   else renderOrdersTab(body);
 }
 
-/* ---------- عرض المنتجات للمشرفة (قراءة فقط، بدون إضافة أو حذف) ---------- */
+/* ---------- عرض المنتجات للمشرف (قراءة فقط، بدون إضافة أو حذف) ---------- */
 function renderProductsReadOnly(body){
   if (state.products.length === 0){
     body.innerHTML = `<p class="hint center" style="padding:30px 0;">لا توجد منتجات مضافة بعد.</p>`;
@@ -721,6 +726,7 @@ function renderOrdersTab(body){
           <div>👤 ${esc(o.customer_name)}</div>
           <div>📍 ${esc(o.address || o.location)}${o.city_name ? ` — ${esc(o.city_name)}${o.region_name ? " / " + esc(o.region_name) : ""}` : ""}</div>
           <div>📞 ${esc(o.phone_number || o.phone)}</div>
+          ${o.instagram_username ? `<div>📷 @${esc(o.instagram_username)}</div>` : ""}
           <div style="margin-top:6px;">${alwaseetBadge(o)}</div>
         </div>
       </div>
@@ -771,7 +777,7 @@ function renderSettingsTab(body){
       <button class="primary-btn" id="saveWa">حفظ</button>
     </div>
     <div class="panel">
-      <h3>تغيير كلمة مرور مديرة المتجر</h3>
+      <h3>تغيير كلمة مرور مدير المتجر</h3>
       <input class="plain-input" id="oldPw" type="password" placeholder="كلمة المرور الحالية">
       <input class="plain-input" id="newPw" type="password" placeholder="كلمة المرور الجديدة">
       <div class="err" id="pwMsg" style="margin:-6px 0 10px;font-size:12px;"></div>
@@ -849,13 +855,13 @@ async function renderMyAlwaseetTab(body){
     <div class="panel">
       <h3>حساب الوسيط للتوصيل الخاص بي</h3>
       <p class="hint">
-        اربطي حسابك الخاص في "الوسيط للتوصيل" هنا حتى تصلك الحجوزات مباشرة على اسمك بالتناوب مع باقي المشرفات.
-        كلمة مرورك تُخزَّن مشفّرة ولا تُعرض لأي أحد بعد الحفظ، حتى لكِ.
-        ${current.has_account ? `<br><span style="color:var(--moss);font-weight:700;">✓ حسابك مضبوط حاليًا (${esc(current.alwaseet_username || "")})</span>` : `<br><span style="color:var(--err);font-weight:700;">لم تضبطي حسابك بعد — لن تصلك أي حجوزات عبر الوسيط حتى تضبطيه</span>`}
+        اربط حسابك الخاص في "الوسيط للتوصيل" هنا حتى تصلك الحجوزات مباشرة على اسمك بالتناوب مع باقي المشرفين.
+        كلمة مرورك تُخزَّن مشفّرة ولا تُعرض لأي أحد بعد الحفظ، حتى لك.
+        ${current.has_account ? `<br><span style="color:var(--moss);font-weight:700;">✓ حسابك مضبوط حاليًا (${esc(current.alwaseet_username || "")})</span>` : `<br><span style="color:var(--err);font-weight:700;">لم تضبط حسابك بعد — لن تصلك أي حجوزات عبر الوسيط حتى تضبطه</span>`}
       </p>
       <input class="plain-input" id="awUsr" placeholder="اسم المستخدم في الوسيط" value="${esc(current.alwaseet_username || "")}" dir="ltr">
-      <input class="plain-input" id="awPw" type="password" placeholder="${current.has_account ? "كلمة مرور جديدة (اتركيه فارغًا للإبقاء على القديمة)" : "كلمة المرور في الوسيط"}" dir="ltr">
-      <input class="plain-input" id="awWa" placeholder="رقم واتساب شخصي للتواصل مع الزبونة (مثال: 9647701234567)" value="${esc(current.whatsapp_number || "")}" dir="ltr">
+      <input class="plain-input" id="awPw" type="password" placeholder="${current.has_account ? "كلمة مرور جديدة (اتركه فارغًا للإبقاء على القديمة)" : "كلمة المرور في الوسيط"}" dir="ltr">
+      <input class="plain-input" id="awWa" placeholder="رقم واتساب شخصي للتواصل مع الزبون (مثال: 9647701234567)" value="${esc(current.whatsapp_number || "")}" dir="ltr">
       <div class="err" id="awErr" style="margin:-6px 0 10px;color:var(--err);font-size:12px;"></div>
       <button class="primary-btn" id="saveAw">حفظ</button>
     </div>
@@ -869,11 +875,11 @@ async function renderMyAlwaseetTab(body){
     errEl.textContent = "";
 
     if (awWa && !isValidWhatsapp(awWa)) {
-      errEl.textContent = "رقم واتساب غير صالح، أدخليه مع مفتاح الدولة بدون علامة + (مثال: 9647701234567)";
+      errEl.textContent = "رقم واتساب غير صالح، أدخله مع مفتاح الدولة بدون علامة + (مثال: 9647701234567)";
       return;
     }
     if (awUsr && !awPw && !current.has_account) {
-      errEl.textContent = "أدخلي كلمة مرور حساب الوسيط";
+      errEl.textContent = "أدخل كلمة مرور حساب الوسيط";
       return;
     }
 
@@ -901,19 +907,19 @@ async function renderMyAlwaseetTab(body){
   };
 }
 
-/* ---------- تبويب إدارة المشرفات (owner فقط) ---------- */
+/* ---------- تبويب إدارة المشرفين (owner فقط) ---------- */
 async function renderAdminsTab(body){
   body.innerHTML = `
     <div class="panel">
-      <h3>إضافة مشرفة جديدة</h3>
-      <p class="hint">يمكن للمشرفة الجديدة مراجعة الحجوزات فقط، ولا تستطيع تغيير كلمة المرور أو رقم واتساب أو حذف/إضافة المنتجات.<br>ستظهر لكِ كلمة المرور مرة واحدة فقط بعد الإضافة — احفظيها فورًا، فلا يمكن استرجاعها بعد ذلك من أي مكان.</p>
+      <h3>إضافة مشرف جديد</h3>
+      <p class="hint">يمكن للمشرف الجديد مراجعة الحجوزات فقط، ولا يستطيع تغيير كلمة المرور أو رقم واتساب أو حذف/إضافة المنتجات.<br>ستظهر لك كلمة المرور مرة واحدة فقط بعد الإضافة — احفظها فورًا، فلا يمكن استرجاعها بعد ذلك من أي مكان.</p>
       <input class="plain-input" id="newUsr" placeholder="اسم مستخدم جديد">
       <input class="plain-input" id="newPw" type="password" placeholder="كلمة المرور">
       <div class="err" id="addAdminErr" style="margin:-6px 0 10px;color:var(--err);font-size:12px;"></div>
-      <button class="primary-btn" id="addAdminBtn">+ إضافة مشرفة</button>
+      <button class="primary-btn" id="addAdminBtn">+ إضافة مشرف</button>
     </div>
     <div class="panel">
-      <h3>المشرفات الحاليات</h3>
+      <h3>المشرفين الحاليين</h3>
       <div id="staffList"><p class="hint center">جارِ التحميل...</p></div>
     </div>
   `;
@@ -942,14 +948,14 @@ async function renderAdminsTab(body){
       document.getElementById("newUsr").value = "";
       document.getElementById("newPw").value = "";
       // كلمة المرور بنصها الصريح موجودة هنا فقط لحظيًا قبل أن تُهاش وتُرسل.
-      // بعد هذه اللحظة لا يمكن استرجاعها من أي مكان، لذا نعرضها مرة واحدة فقط للمشرفة.
+      // بعد هذه اللحظة لا يمكن استرجاعها من أي مكان، لذا نعرضها مرة واحدة فقط للمشرف.
       showOneTimeCredentials(newUsr, newPw);
       await renderAdminsTab(body);
     } catch (e) {
       console.error("add admin error", e);
-      errEl.textContent = e.message || "تعذر إضافة المشرفة";
+      errEl.textContent = e.message || "تعذر إضافة المشرف";
     } finally {
-      btn.disabled = false; btn.textContent = "+ إضافة مشرفة";
+      btn.disabled = false; btn.textContent = "+ إضافة مشرف";
     }
   };
 
@@ -961,21 +967,21 @@ async function renderAdminsTab(body){
     if (error) throw error;
     const listEl = document.getElementById("staffList");
     if (!data || data.length === 0) {
-      listEl.innerHTML = `<p class="hint center">لا توجد مشرفات مضافة بعد.</p>`;
+      listEl.innerHTML = `<p class="hint center">لا يوجد مشرفون مضافون بعد.</p>`;
       return;
     }
     listEl.innerHTML = data.map(s => `
       <div class="staff-row">
         <div class="info">
           <h4>${esc(s.username)}</h4>
-          <p>مراجعة الحجوزات فقط · أُضيفت ${new Date(s.created_at).toLocaleDateString("ar")}</p>
+          <p>مراجعة الحجوزات فقط · أُضيف ${new Date(s.created_at).toLocaleDateString("ar")}</p>
         </div>
         <button class="del-btn" data-removeusr="${esc(s.username)}">🗑</button>
       </div>
     `).join("");
     listEl.querySelectorAll("[data-removeusr]").forEach(b => {
       b.onclick = async () => {
-        if (!confirm(`هل تريدين إزالة صلاحية ${b.dataset.removeusr}؟`)) return;
+        if (!confirm(`هل تريد إزالة صلاحية ${b.dataset.removeusr}؟`)) return;
         try {
           const { error } = await supabaseClient.rpc('remove_staff_admin', {
             p_owner_username: state.currentAdmin.username,
@@ -994,7 +1000,7 @@ async function renderAdminsTab(body){
   } catch (e) {
     console.error("list admins error", e);
     document.getElementById("staffList").innerHTML =
-      `<p class="hint center">تعذر تحميل قائمة المشرفات.<br>${esc(e.message || "")}</p>`;
+      `<p class="hint center">تعذر تحميل قائمة المشرفين.<br>${esc(e.message || "")}</p>`;
   }
 }
 
