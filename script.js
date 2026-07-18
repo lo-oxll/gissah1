@@ -245,7 +245,7 @@ function renderStore(){
           <h1 class="brand display">قصّة</h1>
           <img src="logo.png" alt="شعار قصّة" class="logo-img">
         </div>
-        <span class="eyebrow">عناية بالجسم</span>
+        <span class="eyebrow">للعناية بالجسم</span>
         <p class="lede">كل منتج هنا هو فصل من طقوسك اليومية. اختر منتجك واحجزه، وسنتواصل معك لإتمام الطلب.</p>
         <a href="https://lo-oxll.github.io/gissa-web/" target="_blank" rel="noopener" class="contact-btn">تواصل مع المتجر</a>
       </header>
