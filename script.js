@@ -26,6 +26,62 @@ async function sha256Hex(text) {
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
+/* ======================= الربط مع شركة الوسيط للتوصيل ======================= */
+// كل الاتصال بـ API الوسيط يمر عبر Edge Function باسم "alwaseet" على Supabase،
+// لأن اسم المستخدم وكلمة مرور التاجر يجب أن يبقيا على الخادم فقط ولا يظهرا هنا.
+const alwaseetCache = { cities: null, packageSizeId: null, regionsByCity: {} };
+
+async function alwaseetCall(action, params = {}) {
+  const { data, error } = await supabaseClient.functions.invoke('alwaseet', {
+    body: { action, ...params }
+  });
+  if (error) throw error;
+  if (!data || data.status !== true) throw new Error(data?.msg || "تعذر الاتصال بشركة التوصيل");
+  return data.data;
+}
+
+async function getAlwaseetCities() {
+  if (alwaseetCache.cities) return alwaseetCache.cities;
+  alwaseetCache.cities = await alwaseetCall('cities');
+  return alwaseetCache.cities;
+}
+
+async function getAlwaseetRegions(cityId) {
+  if (alwaseetCache.regionsByCity[cityId]) return alwaseetCache.regionsByCity[cityId];
+  const regions = await alwaseetCall('regions', { city_id: cityId });
+  alwaseetCache.regionsByCity[cityId] = regions;
+  return regions;
+}
+
+// يحدَّد حجم الطرد تلقائيًا (يُفضَّل "عادي") حتى لا نُثقل نموذج الحجز بحقل إضافي للزبونة
+async function getDefaultPackageSizeId() {
+  if (alwaseetCache.packageSizeId) return alwaseetCache.packageSizeId;
+  const sizes = await alwaseetCall('package-sizes');
+  const normal = sizes.find(s => s.size?.includes("عادي")) || sizes[0];
+  alwaseetCache.packageSizeId = normal?.id;
+  return alwaseetCache.packageSizeId;
+}
+
+// يرسل طلبًا واحدًا إلى الوسيط، ويعيد { qr_id, qr_link } عند النجاح أو يرمي خطأ عند الفشل
+async function sendOrderToAlwaseet({ name, phone, phone2, cityId, regionId, location, productLabel, qty, total, notes }) {
+  const packageSize = await getDefaultPackageSizeId();
+  const result = await alwaseetCall('create-order', {
+    client_name: name,
+    client_mobile: phone,
+    client_mobile2: phone2 || undefined,
+    city_id: cityId,
+    region_id: regionId,
+    location,
+    type_name: productLabel,
+    items_number: qty,
+    price: total,
+    package_size: packageSize,
+    merchant_notes: notes || ""
+  });
+  const row = Array.isArray(result) ? result[0] : result;
+  return { qr_id: String(row.qr_id), qr_link: row.qr_link };
+}
+
 /* ======================= حالة عامة ======================= */
 let state = {
   view: "store",
@@ -205,10 +261,15 @@ function renderStore(){
 function openBookingModal(){
   const p = state.selectedProduct;
   let qty = 1;
+  let cities = [];
+  let regions = [];
+  let citiesFailed = false;
 
   function paint(){
     const total = qty * Number(p.price);
     const modalImg = p.image ? '<img src="' + esc(p.image) + '">' : '<div class="ph"></div>';
+    const cityOptions = cities.map(c => `<option value="${esc(c.id)}">${esc(c.city_name)}</option>`).join("");
+    const regionOptions = regions.map(r => `<option value="${esc(r.id)}">${esc(r.region_name)}</option>`).join("");
     modalBg.innerHTML = `
       <div class="modal">
         <div class="row">
@@ -231,7 +292,15 @@ function openBookingModal(){
           </div>
         </div>
         <div class="field"><div class="box">👤<input id="fName" placeholder="الاسم الكامل"></div><div class="err" id="errName"></div></div>
-        <div class="field"><div class="box">📍<input id="fLoc" placeholder="الموقع / العنوان"></div><div class="err" id="errLoc"></div></div>
+        ${citiesFailed ? "" : `
+        <div class="field"><div class="box">🏙️<select id="fCity" style="width:100%;background:transparent;border:0;outline:0;font-family:'Cairo',sans-serif;font-size:14px;">
+          <option value="">${cities.length ? "اختاري المدينة" : "جارِ التحميل..."}</option>${cityOptions}
+        </select></div><div class="err" id="errCity"></div></div>
+        <div class="field"><div class="box">🗺️<select id="fRegion" style="width:100%;background:transparent;border:0;outline:0;font-family:'Cairo',sans-serif;font-size:14px;" ${regions.length ? "" : "disabled"}>
+          <option value="">${regions.length ? "اختاري المنطقة" : "اختاري المدينة أولًا"}</option>${regionOptions}
+        </select></div><div class="err" id="errRegion"></div></div>
+        `}
+        <div class="field"><div class="box">📍<input id="fLoc" placeholder="${citiesFailed ? "الموقع / العنوان" : "أقرب نقطة دالة (تفاصيل إضافية)"}"></div><div class="err" id="errLoc"></div></div>
         <div class="field"><div class="box">📞<input id="fPhone" placeholder="رقم الهاتف" type="tel"></div><div class="err" id="errPhone"></div></div>
         <div class="total-row"><span style="font-weight:400;color:var(--muted)">الإجمالي</span><span>${money(total)} د.ع</span></div>
         <button class="primary-btn" id="submitOrder">تأكيد الحجز</button>
@@ -242,37 +311,87 @@ function openBookingModal(){
     document.getElementById("qtyMinus").onclick = () => { qty = Math.max(1, qty-1); paint(); };
     document.getElementById("qtyPlus").onclick = () => { qty = Math.min(10, qty+1); paint(); };
     document.getElementById("submitOrder").onclick = submit;
+
+    if (!citiesFailed) {
+      document.getElementById("fCity").onchange = async (e) => {
+        const cityId = e.target.value;
+        regions = [];
+        paint();
+        if (!cityId) return;
+        try {
+          regions = await getAlwaseetRegions(cityId);
+        } catch (err) {
+          console.error("regions load error", err);
+        }
+        paint();
+        // إعادة اختيار المدينة نفسها بعد إعادة الرسم حتى لا تُفقد عند تحميل المناطق
+        document.getElementById("fCity").value = cityId;
+      };
+    }
   }
+
+  // تحميل قائمة المدن أول مرة فقط، وإن فشل الاتصال (مثلًا الدالة غير منشورة بعد)
+  // يتحول النموذج تلقائيًا لحقل عنوان نصي حر بدل تعطيل الحجز بالكامل
+  (async () => {
+    try {
+      cities = await getAlwaseetCities();
+      paint();
+    } catch (err) {
+      console.error("alwaseet cities load error", err);
+      citiesFailed = true;
+      paint();
+    }
+  })();
 
   async function submit(){
     const name = document.getElementById("fName").value.trim();
     const loc = document.getElementById("fLoc").value.trim();
     const phone = document.getElementById("fPhone").value.trim();
+    const cityId = citiesFailed ? "" : document.getElementById("fCity")?.value;
+    const regionId = citiesFailed ? "" : document.getElementById("fRegion")?.value;
     let ok = true;
     document.getElementById("errName").textContent = "";
     document.getElementById("errLoc").textContent = "";
     document.getElementById("errPhone").textContent = "";
+    if (!citiesFailed) {
+      document.getElementById("errCity").textContent = "";
+      document.getElementById("errRegion").textContent = "";
+    }
     if (!name){ document.getElementById("errName").textContent = "أدخلي الاسم"; ok = false; }
     if (!loc){ document.getElementById("errLoc").textContent = "أدخلي الموقع"; ok = false; }
     if (!phone || phone.replace(/\D/g,"").length < 8){ document.getElementById("errPhone").textContent = "أدخلي رقم هاتف صحيح"; ok = false; }
+    if (!citiesFailed && !cityId){ document.getElementById("errCity").textContent = "اختاري المدينة"; ok = false; }
+    if (!citiesFailed && !regionId){ document.getElementById("errRegion").textContent = "اختاري المنطقة"; ok = false; }
     if (!ok) return;
 
     const btn = document.getElementById("submitOrder");
     btn.disabled = true; btn.textContent = "جارِ الإرسال...";
 
     const total = qty * Number(p.price);
+    const cityName = cities.find(c => String(c.id) === String(cityId))?.city_name || "";
+    const regionName = regions.find(r => String(r.id) === String(regionId))?.region_name || "";
 
-    // إرسال الطلب إلى جدول orders في Supabase (نفس الحقول الأصلية فقط، لتفادي أخطاء أعمدة غير موجودة)
-    const { error } = await supabaseClient
+    // 1) إرسال الطلب إلى جدول orders في Supabase أولًا (هذا هو السجل الأساسي دائمًا،
+    //    بغض النظر عن نجاح أو فشل الاتصال بالوسيط لاحقًا)
+    const { data: inserted, error } = await supabaseClient
       .from('orders')
       .insert([
         {
           customer_name: name,
           phone_number: phone,
           address: loc,
-          product_name: `${p.name} (عدد: ${qty})`
+          product_name: `${p.name} (عدد: ${qty})`,
+          city_id: cityId || null,
+          region_id: regionId || null,
+          city_name: cityName || null,
+          region_name: regionName || null,
+          qty,
+          total,
+          alwaseet_status: 'pending'
         }
-      ]);
+      ])
+      .select()
+      .single();
 
     if (error) {
       console.error("Database insert error:", error);
@@ -281,23 +400,38 @@ function openBookingModal(){
       return;
     }
 
-    // تحديث فوري للواجهة محليًا (الصورة/الكمية/الإجمالي تُعرض هنا فقط، لأن جدول orders الأصلي لا يخزنها)
-    const localOrder = {
-      id: uid(),
-      product_name: `${p.name} (عدد: ${qty})`,
-      product_image: p.image || "",
-      total,
-      qty,
-      customer_name: name,
-      address: loc,
-      phone_number: phone,
-      created_at: new Date().toISOString()
-    };
+    // تحديث فوري للواجهة محليًا (الصورة تُعرض هنا فقط، لأن جدول orders الأصلي لا يخزنها)
+    const localOrder = { ...inserted, product_image: p.image || "" };
     state.orders.unshift(localOrder);
+
+    // 2) إرسال الطلب مباشرة إلى الوسيط للتوصيل — فقط إذا اختارت الزبونة مدينة/منطقة فعليًا
+    if (cityId && regionId) {
+      try {
+        const { qr_id, qr_link } = await sendOrderToAlwaseet({
+          name, phone, cityId, regionId, location: loc,
+          productLabel: p.name, qty, total
+        });
+        localOrder.alwaseet_qr_id = qr_id;
+        localOrder.alwaseet_qr_link = qr_link;
+        localOrder.alwaseet_status = 'sent';
+        await supabaseClient.from('orders').update({
+          alwaseet_qr_id: qr_id, alwaseet_qr_link: qr_link, alwaseet_status: 'sent'
+        }).eq('id', inserted.id);
+      } catch (err) {
+        // الحجز يبقى ناجحًا للزبونة دائمًا حتى لو فشل الإرسال للوسيط —
+        // يمكن للمشرفة إعادة المحاولة يدويًا من لوحة الإدارة
+        console.error("alwaseet create-order error", err);
+        localOrder.alwaseet_status = 'failed';
+        localOrder.alwaseet_error = err.message || "خطأ غير معروف";
+        await supabaseClient.from('orders').update({
+          alwaseet_status: 'failed', alwaseet_error: localOrder.alwaseet_error
+        }).eq('id', inserted.id);
+      }
+    }
 
     const num = formatWhatsapp(state.settings.whatsapp);
     if (num){
-      const msg = `حجز جديد من متجر قصة\nالمنتج: ${p.name}\nالكمية: ${qty}\nالسعر الإجمالي: ${total} د.ع\nاسم العميل: ${name}\nالموقع: ${loc}\nرقم الهاتف: ${phone}`;
+      const msg = `حجز جديد من متجر قصة\nالمنتج: ${p.name}\nالكمية: ${qty}\nالسعر الإجمالي: ${total} د.ع\nاسم العميل: ${name}\nالموقع: ${loc}${cityName ? ` (${cityName}${regionName ? " - " + regionName : ""})` : ""}\nرقم الهاتف: ${phone}`;
       window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank");
     }
     showToast("تم إرسال الحجز بنجاح، سيتم التواصل معك قريبًا");
@@ -530,6 +664,19 @@ function renderProductsTab(body){
   }
 }
 
+function alwaseetBadge(o){
+  if (o.alwaseet_status === 'sent' && o.alwaseet_qr_link) {
+    return `<a href="${esc(o.alwaseet_qr_link)}" target="_blank" style="font-size:11px;color:var(--moss);font-weight:700;">✓ أُرسل للوسيط · وصل #${esc(o.alwaseet_qr_id)}</a>`;
+  }
+  if (o.alwaseet_status === 'failed') {
+    return `<span style="font-size:11px;color:var(--err);">⚠ لم يُرسل للوسيط (${esc(o.alwaseet_error || "خطأ")}) <button data-retry="${o.id}" style="border:0;background:none;color:var(--ink);text-decoration:underline;cursor:pointer;font-family:'Cairo',sans-serif;font-size:11px;">إعادة المحاولة</button></span>`;
+  }
+  if (o.city_id && o.region_id) {
+    return `<span style="font-size:11px;color:var(--muted);">⏳ لم تُرسل بعد <button data-retry="${o.id}" style="border:0;background:none;color:var(--ink);text-decoration:underline;cursor:pointer;font-family:'Cairo',sans-serif;font-size:11px;">إرسال الآن</button></span>`;
+  }
+  return ""; // طلبات قديمة قبل تفعيل الربط، أو أُدخلت بدون مدينة/منطقة
+}
+
 function renderOrdersTab(body){
   if (state.orders.length === 0){
     body.innerHTML = `<p class="hint center" style="padding:30px 0;">لا توجد حجوزات بعد.</p>`;
@@ -549,12 +696,46 @@ function renderOrdersTab(body){
         </div>
         <div class="order-details">
           <div>👤 ${esc(o.customer_name)}</div>
-          <div>📍 ${esc(o.address || o.location)}</div>
+          <div>📍 ${esc(o.address || o.location)}${o.city_name ? ` — ${esc(o.city_name)}${o.region_name ? " / " + esc(o.region_name) : ""}` : ""}</div>
           <div>📞 ${esc(o.phone_number || o.phone)}</div>
+          <div style="margin-top:6px;">${alwaseetBadge(o)}</div>
         </div>
       </div>
     `;
   }).join("");
+
+  body.querySelectorAll("[data-retry]").forEach(b => {
+    b.onclick = async () => {
+      const order = state.orders.find(o => String(o.id) === String(b.dataset.retry));
+      if (!order) return;
+      b.textContent = "جارِ الإرسال...";
+      b.disabled = true;
+      try {
+        const { qr_id, qr_link } = await sendOrderToAlwaseet({
+          name: order.customer_name,
+          phone: order.phone_number || order.phone,
+          cityId: order.city_id,
+          regionId: order.region_id,
+          location: order.address || order.location,
+          productLabel: (order.product_name || "").replace(/\s*\(عدد:.*\)$/, ""),
+          qty: order.qty || 1,
+          total: order.total || 0
+        });
+        await supabaseClient.from('orders').update({
+          alwaseet_qr_id: qr_id, alwaseet_qr_link: qr_link, alwaseet_status: 'sent', alwaseet_error: null
+        }).eq('id', order.id);
+        order.alwaseet_qr_id = qr_id; order.alwaseet_qr_link = qr_link; order.alwaseet_status = 'sent';
+        showToast("تم إرسال الطلب إلى الوسيط بنجاح");
+        renderOrdersTab(body);
+      } catch (err) {
+        console.error("retry alwaseet error", err);
+        order.alwaseet_error = err.message || "خطأ غير معروف";
+        await supabaseClient.from('orders').update({ alwaseet_status: 'failed', alwaseet_error: order.alwaseet_error }).eq('id', order.id);
+        showToast("فشلت إعادة المحاولة: " + order.alwaseet_error, "err");
+        renderOrdersTab(body);
+      }
+    };
+  });
 }
 
 function renderSettingsTab(body){
