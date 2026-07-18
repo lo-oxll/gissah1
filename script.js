@@ -62,7 +62,7 @@ async function getDefaultPackageSizeId() {
   return alwaseetCache.packageSizeId;
 }
 
-// يرسل طلبًا واحدًا إلى الوسيط، ويعيد { qr_id, qr_link } عند النجاح أو يرمي خطأ عند الفشل
+// يرسل طلبًا واحدًا إلى الوسيط، ويعيد { qr_id, qr_link, assigned_username, assigned_whatsapp } عند النجاح أو يرمي خطأ عند الفشل
 async function sendOrderToAlwaseet({ name, phone, phone2, cityId, regionId, location, productLabel, qty, total, notes }) {
   const packageSize = await getDefaultPackageSizeId();
   const result = await alwaseetCall('create-order', {
@@ -79,7 +79,12 @@ async function sendOrderToAlwaseet({ name, phone, phone2, cityId, regionId, loca
     merchant_notes: notes || ""
   });
   const row = Array.isArray(result) ? result[0] : result;
-  return { qr_id: String(row.qr_id), qr_link: row.qr_link };
+  return {
+    qr_id: String(row.qr_id),
+    qr_link: row.qr_link,
+    assigned_username: row.assigned_staff_username || null,
+    assigned_whatsapp: row.assigned_staff_whatsapp || null
+  };
 }
 
 /* ======================= حالة عامة ======================= */
@@ -264,6 +269,9 @@ function openBookingModal(){
   let cities = [];
   let regions = [];
   let citiesFailed = false;
+  // القيم تُحفظ هنا وتُعاد تعبئتها في كل إعادة رسم، لأن paint() يعيد بناء الـ HTML من الصفر
+  // في كل مرة (عند تغيير الكمية أو المدينة)، وبدون هذا كانت قيم الحقول تُمسح بالكامل.
+  const vals = { name: "", loc: "", phone: "" };
 
   function paint(){
     const total = qty * Number(p.price);
@@ -291,7 +299,7 @@ function openBookingModal(){
             <button id="qtyPlus">+</button>
           </div>
         </div>
-        <div class="field"><div class="box">👤<input id="fName" placeholder="الاسم الكامل"></div><div class="err" id="errName"></div></div>
+        <div class="field"><div class="box">👤<input id="fName" placeholder="الاسم الكامل" value="${esc(vals.name)}"></div><div class="err" id="errName"></div></div>
         ${citiesFailed ? "" : `
         <div class="field"><div class="box">🏙️<select id="fCity" style="width:100%;background:transparent;border:0;outline:0;font-family:'Cairo',sans-serif;font-size:14px;">
           <option value="">${cities.length ? "اختاري المدينة" : "جارِ التحميل..."}</option>${cityOptions}
@@ -300,8 +308,8 @@ function openBookingModal(){
           <option value="">${regions.length ? "اختاري المنطقة" : "اختاري المدينة أولًا"}</option>${regionOptions}
         </select></div><div class="err" id="errRegion"></div></div>
         `}
-        <div class="field"><div class="box">📍<input id="fLoc" placeholder="${citiesFailed ? "الموقع / العنوان" : "أقرب نقطة دالة (تفاصيل إضافية)"}"></div><div class="err" id="errLoc"></div></div>
-        <div class="field"><div class="box">📞<input id="fPhone" placeholder="رقم الهاتف" type="tel"></div><div class="err" id="errPhone"></div></div>
+        <div class="field"><div class="box">📍<input id="fLoc" placeholder="${citiesFailed ? "الموقع / العنوان" : "أقرب نقطة دالة (تفاصيل إضافية)"}" value="${esc(vals.loc)}"></div><div class="err" id="errLoc"></div></div>
+        <div class="field"><div class="box">📞<input id="fPhone" placeholder="رقم الهاتف" type="tel" value="${esc(vals.phone)}"></div><div class="err" id="errPhone"></div></div>
         <div class="total-row"><span style="font-weight:400;color:var(--muted)">الإجمالي</span><span>${money(total)} د.ع</span></div>
         <button class="primary-btn" id="submitOrder">تأكيد الحجز</button>
       </div>
@@ -311,12 +319,17 @@ function openBookingModal(){
     document.getElementById("qtyMinus").onclick = () => { qty = Math.max(1, qty-1); paint(); };
     document.getElementById("qtyPlus").onclick = () => { qty = Math.min(10, qty+1); paint(); };
     document.getElementById("submitOrder").onclick = submit;
+    // حفظ القيم فور كتابتها حتى تبقى محفوظة عبر أي إعادة رسم لاحقة
+    document.getElementById("fName").oninput = (e) => vals.name = e.target.value;
+    document.getElementById("fLoc").oninput = (e) => vals.loc = e.target.value;
+    document.getElementById("fPhone").oninput = (e) => vals.phone = e.target.value;
 
     if (!citiesFailed) {
       document.getElementById("fCity").onchange = async (e) => {
         const cityId = e.target.value;
         regions = [];
         paint();
+        document.getElementById("fCity").value = cityId;
         if (!cityId) return;
         try {
           regions = await getAlwaseetRegions(cityId);
@@ -344,9 +357,9 @@ function openBookingModal(){
   })();
 
   async function submit(){
-    const name = document.getElementById("fName").value.trim();
-    const loc = document.getElementById("fLoc").value.trim();
-    const phone = document.getElementById("fPhone").value.trim();
+    const name = vals.name.trim();
+    const loc = vals.loc.trim();
+    const phone = vals.phone.trim();
     const cityId = citiesFailed ? "" : document.getElementById("fCity")?.value;
     const regionId = citiesFailed ? "" : document.getElementById("fRegion")?.value;
     let ok = true;
@@ -405,17 +418,22 @@ function openBookingModal(){
     state.orders.unshift(localOrder);
 
     // 2) إرسال الطلب مباشرة إلى الوسيط للتوصيل — فقط إذا اختارت الزبونة مدينة/منطقة فعليًا
+    let assignedWhatsapp = null;
     if (cityId && regionId) {
       try {
-        const { qr_id, qr_link } = await sendOrderToAlwaseet({
+        const { qr_id, qr_link, assigned_username, assigned_whatsapp } = await sendOrderToAlwaseet({
           name, phone, cityId, regionId, location: loc,
           productLabel: p.name, qty, total
         });
         localOrder.alwaseet_qr_id = qr_id;
         localOrder.alwaseet_qr_link = qr_link;
         localOrder.alwaseet_status = 'sent';
+        localOrder.assigned_staff_username = assigned_username;
+        localOrder.assigned_staff_whatsapp = assigned_whatsapp;
+        assignedWhatsapp = assigned_whatsapp;
         await supabaseClient.from('orders').update({
-          alwaseet_qr_id: qr_id, alwaseet_qr_link: qr_link, alwaseet_status: 'sent'
+          alwaseet_qr_id: qr_id, alwaseet_qr_link: qr_link, alwaseet_status: 'sent',
+          assigned_staff_username: assigned_username, assigned_staff_whatsapp: assigned_whatsapp
         }).eq('id', inserted.id);
       } catch (err) {
         // الحجز يبقى ناجحًا للزبونة دائمًا حتى لو فشل الإرسال للوسيط —
@@ -429,7 +447,9 @@ function openBookingModal(){
       }
     }
 
-    const num = formatWhatsapp(state.settings.whatsapp);
+    // إن كانت هناك مشرفة مسؤولة عن هذا الطلب برقم واتساب شخصي، تُفتح المحادثة معها مباشرة؛
+    // وإلا يُستخدم الرقم العام المشترك من الإعدادات كخطة بديلة
+    const num = formatWhatsapp(assignedWhatsapp || state.settings.whatsapp);
     if (num){
       const msg = `حجز جديد من متجر قصة\nالمنتج: ${p.name}\nالكمية: ${qty}\nالسعر الإجمالي: ${total} د.ع\nاسم العميل: ${name}\nالموقع: ${loc}${cityName ? ` (${cityName}${regionName ? " - " + regionName : ""})` : ""}\nرقم الهاتف: ${phone}`;
       window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank");
@@ -519,10 +539,12 @@ function renderAdmin(){
       <button class="tab ${state.adminTab==='orders'?'active':''}" data-tab="orders">الحجوزات (${state.orders.length})</button>
       <button class="tab ${state.adminTab==='settings'?'active':''}" data-tab="settings">الإعدادات</button>
       <button class="tab ${state.adminTab==='admins'?'active':''}" data-tab="admins">المشرفات</button>
+      <button class="tab ${state.adminTab==='myAlwaseet'?'active':''}" data-tab="myAlwaseet">حسابي بالوسيط</button>
     `
     : `
       <button class="tab ${state.adminTab==='orders'?'active':''}" data-tab="orders">الحجوزات (${state.orders.length})</button>
       <button class="tab ${state.adminTab==='products'?'active':''}" data-tab="products">المنتجات</button>
+      <button class="tab ${state.adminTab==='myAlwaseet'?'active':''}" data-tab="myAlwaseet">حسابي بالوسيط</button>
     `;
 
   app.innerHTML = `
@@ -545,8 +567,8 @@ function renderAdmin(){
   });
 
   // حماية إضافية: منع الوصول لأي تبويب غير مصرح به حتى لو تم التلاعب بالحالة محليًا
-  // المشرفة (staff) يُسمح لها فقط بـ orders و products (عرض فقط)
-  if (!isOwner && state.adminTab !== "orders" && state.adminTab !== "products") state.adminTab = "orders";
+  // المشرفة (staff) يُسمح لها فقط بـ orders و products (عرض فقط) و myAlwaseet
+  if (!isOwner && !["orders", "products", "myAlwaseet"].includes(state.adminTab)) state.adminTab = "orders";
 
   const body = document.getElementById("adminBody");
   if (state.adminTab === "products") {
@@ -556,6 +578,7 @@ function renderAdmin(){
   else if (state.adminTab === "orders") renderOrdersTab(body);
   else if (state.adminTab === "settings" && isOwner) renderSettingsTab(body);
   else if (state.adminTab === "admins" && isOwner) renderAdminsTab(body);
+  else if (state.adminTab === "myAlwaseet") renderMyAlwaseetTab(body);
   else renderOrdersTab(body);
 }
 
@@ -800,6 +823,80 @@ function renderSettingsTab(body){
       console.error("change password error", e);
       msgEl.style.color = "var(--err)";
       msgEl.textContent = "كلمة المرور الحالية غير صحيحة أو تعذر الاتصال";
+    }
+  };
+}
+
+/* ---------- تبويب حساب الوسيط الشخصي (owner و staff) ---------- */
+async function renderMyAlwaseetTab(body){
+  body.innerHTML = `<p class="hint center" style="padding:20px 0;">جارِ التحميل...</p>`;
+
+  let current = { has_account: false, alwaseet_username: "", whatsapp_number: "" };
+  try {
+    const { data, error } = await supabaseClient.rpc('get_my_alwaseet_account', {
+      p_username: state.currentAdmin.username,
+      p_password_hash: state.currentAdmin.passwordHash
+    });
+    if (error) throw error;
+    if (data && data.length > 0) current = data[0];
+  } catch (e) {
+    console.error("get_my_alwaseet_account error", e);
+    body.innerHTML = `<p class="hint center" style="padding:20px 0;">تعذر تحميل بيانات حسابك.<br>${esc(e.message || "")}</p>`;
+    return;
+  }
+
+  body.innerHTML = `
+    <div class="panel">
+      <h3>حساب الوسيط للتوصيل الخاص بي</h3>
+      <p class="hint">
+        اربطي حسابك الخاص في "الوسيط للتوصيل" هنا حتى تصلك الحجوزات مباشرة على اسمك بالتناوب مع باقي المشرفات.
+        كلمة مرورك تُخزَّن مشفّرة ولا تُعرض لأي أحد بعد الحفظ، حتى لكِ.
+        ${current.has_account ? `<br><span style="color:var(--moss);font-weight:700;">✓ حسابك مضبوط حاليًا (${esc(current.alwaseet_username || "")})</span>` : `<br><span style="color:var(--err);font-weight:700;">لم تضبطي حسابك بعد — لن تصلك أي حجوزات عبر الوسيط حتى تضبطيه</span>`}
+      </p>
+      <input class="plain-input" id="awUsr" placeholder="اسم المستخدم في الوسيط" value="${esc(current.alwaseet_username || "")}" dir="ltr">
+      <input class="plain-input" id="awPw" type="password" placeholder="${current.has_account ? "كلمة مرور جديدة (اتركيه فارغًا للإبقاء على القديمة)" : "كلمة المرور في الوسيط"}" dir="ltr">
+      <input class="plain-input" id="awWa" placeholder="رقم واتساب شخصي للتواصل مع الزبونة (مثال: 9647701234567)" value="${esc(current.whatsapp_number || "")}" dir="ltr">
+      <div class="err" id="awErr" style="margin:-6px 0 10px;color:var(--err);font-size:12px;"></div>
+      <button class="primary-btn" id="saveAw">حفظ</button>
+    </div>
+  `;
+
+  document.getElementById("saveAw").onclick = async () => {
+    const awUsr = document.getElementById("awUsr").value.trim();
+    const awPw = document.getElementById("awPw").value;
+    const awWa = document.getElementById("awWa").value.trim();
+    const errEl = document.getElementById("awErr");
+    errEl.textContent = "";
+
+    if (awWa && !isValidWhatsapp(awWa)) {
+      errEl.textContent = "رقم واتساب غير صالح، أدخليه مع مفتاح الدولة بدون علامة + (مثال: 9647701234567)";
+      return;
+    }
+    if (awUsr && !awPw && !current.has_account) {
+      errEl.textContent = "أدخلي كلمة مرور حساب الوسيط";
+      return;
+    }
+
+    const btn = document.getElementById("saveAw");
+    btn.disabled = true; btn.textContent = "جارِ الحفظ...";
+    try {
+      const { error } = await supabaseClient.rpc('update_my_alwaseet_account', {
+        p_username: state.currentAdmin.username,
+        p_password_hash: state.currentAdmin.passwordHash,
+        p_alwaseet_username: awUsr || null,
+        // null يعني "أبقِ كلمة المرور الحالية كما هي دون تغيير" — هذا ما تفعله دالة SQL الآن،
+        // فلا خطر من فقدان كلمة مرور محفوظة سابقًا لمجرد ترك الحقل فارغًا
+        p_alwaseet_password: awPw || null,
+        p_whatsapp: awWa || null
+      });
+      if (error) throw error;
+      showToast("تم حفظ بيانات حسابك بنجاح");
+      renderMyAlwaseetTab(body);
+    } catch (e) {
+      console.error("update_my_alwaseet_account error", e);
+      errEl.textContent = e.message || "تعذر الحفظ";
+    } finally {
+      btn.disabled = false; btn.textContent = "حفظ";
     }
   };
 }
